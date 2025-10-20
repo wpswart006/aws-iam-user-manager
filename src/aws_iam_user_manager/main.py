@@ -1,31 +1,50 @@
 import boto3
+import sys
+import os
+import tomllib
 import time
 import logging
 import time
 
-timestr = time.strftime("%Y%m%d.%H%M%S")
-logging.basicConfig(filename=f"/var/log/aws-iam-user-manager/{timestr}", format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+from pathlib import Path
 
 logger = logging.getLogger()
-HEADER = "#>aws-iam-user-manager>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>."
+def init():
+    with open("config.toml", "rb") as fp:
+        config = tomllib.load(fp)
+
+    log_destination = config.get("log_destination")
+
+    if log_destination:
+        logging.basicConfig(filename=f"{log_destination}", format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+    logger = logging.getLogger("init()")
+    
+    template_file = config.get("template_file")
+    if not template_file:
+        logger.critical("No template file configured")
+        sys.exit()
+    if not Path(template_file).is_file():
+        logger.critical("Template file not found")
+        sys.exit()
+    os.environ["template_file"]=template_file
+
+    output_file = config.get("output_file")
+    if not output_file:
+        logger.critical("No output file configured")
+        sys.exit()
+    
+    os.environ["output_file"]=output_file
+
+
 
 def main() -> None:
+
+    init()
+    logger = logging.getLogger("main()")
+
     logger.info("Starting")
     session = boto3.Session()
-    
-    idx = -1
-    with open("/etc/environment") as fp:
-        for idx, line in enumerate(fp.readlines()):
-            if line.strip() == HEADER:
-                break
 
-    if idx == -1:
-        print("Credentials not in env, cannot update")
-        return
-    
-
-
-    
     iam = session.client("iam")
     sts = session.client("sts")
 
@@ -36,12 +55,6 @@ def main() -> None:
     response = iam.list_access_keys(UserName=username)
     
     for k in filter(lambda x: x["Status"] == "Inactive", response["AccessKeyMetadata"]):
-        """        {
-            'UserName': 'string',
-            'AccessKeyId': 'string',
-            'Status': 'Active'|'Inactive'|'Expired',
-            'CreateDate': datetime(2015, 1, 1)
-        },"""
         logger.info("Disabling access key with id")
         iam.delete_access_key(
             UserName=k["UserName"],
@@ -58,18 +71,21 @@ def main() -> None:
     new_access_key_id = new_access_key["AccessKeyId"]
     new_secret_access_key = new_access_key["SecretAccessKey"]
 
-    with open("/etc/environment", "r") as fp:
-        content = fp.read()
 
-    lines = content.split("\n")
-    lines[idx+1] = f"export AWS_ACCESS_KEY_ID={new_access_key_id}"
-    lines[idx+2] = f"export AWS_SECRET_ACCESS_KEY={new_secret_access_key}"
+    
+    with open(os.environ["template_file"], "r") as fp:
+        template = fp.read()
 
-    content = "\n".join(lines)
+    template = (
+        template.replace("${AWS_ACCESS_KEY_ID}", new_access_key_id)
+        .replace("${AWS_SECRET_ACCESS_KEY}", new_secret_access_key)
+    )
+
+
 
     logging.info("Updating env")
-    with open("/etc/environment", "w") as fp:
-        fp.write(content)
+    with open(os.environ["output_file"], "w") as fp:
+        fp.write(template)
 
     logging.info("Disable old access key")
     response = iam.update_access_key(
