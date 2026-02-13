@@ -6,6 +6,7 @@ import time
 import logging
 import time
 import functools
+import datetime
 
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def init():
 
     if log_destination:
         logging.basicConfig(
-            filename=f"{log_destination}/{datetime.datetime.now().strftime("%Y-%m-%d___%H:%M:00")}",
+            filename=f"{log_destination}/{datetime.datetime.now().strftime("%Y-%m-%d___%H-%M-00")}",
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             level=logging.INFO,
         )
