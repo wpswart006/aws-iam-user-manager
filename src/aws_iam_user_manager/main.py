@@ -13,7 +13,7 @@ logger = logging.getLogger()
 
 
 def init():
-    with open("config.toml", "rb") as fp:
+    with open(f"{Path.home()}/.aws/config.toml", "rb") as fp:
         config = tomllib.load(fp)
 
     log_destination = config.get("log_destination")
