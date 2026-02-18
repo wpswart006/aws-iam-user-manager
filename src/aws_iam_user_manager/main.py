@@ -21,7 +21,7 @@ def init():
 
     if log_destination:
         logging.basicConfig(
-            filename=f"{log_destination}/{datetime.datetime.now().strftime("%Y-%m-%d___%H-%M-00")}",
+            filename=f"{log_destination}/{datetime.datetime.now().strftime("%Y-%m-%d___%H-%M-00")}.txt",
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             level=logging.INFO,
         )
@@ -49,10 +49,13 @@ def retry(func, tries=1):
     logger = logging.getLogger("retry()")
     while tries > 0:
         try:
-            logger.info(f"trying... {tries} left")
+            logger.debug(f"trying {func.__name__}... {tries} left")
             result = func()
             return result
         except Exception as e:
+            logger.error(f"In trying {func.__name__}, the following exception has occured:")
+            logger.error(f"{e}")
+            logger.info(f"{tries} tries left")
             tries -= 1
             exc = e
 
