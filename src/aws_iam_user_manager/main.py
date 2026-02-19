@@ -44,6 +44,12 @@ def init():
     os.environ["output_file"] = output_file
 
 
+def wrapped_partial(func, *args, **kwargs):
+    partial_func = functools.partial(func, *args, **kwargs)
+    functools.update_wrapper(partial_func, func)
+    return partial_func
+
+
 def retry(func, tries=1):
     exc = None
     logger = logging.getLogger("retry()")
@@ -53,7 +59,9 @@ def retry(func, tries=1):
             result = func()
             return result
         except Exception as e:
-            logger.error(f"In trying {func.__name__}, the following exception has occured:")
+            logger.error(
+                f"In trying {func.__name__}, the following exception has occured:"
+            )
             logger.error(f"{e}")
             logger.info(f"{tries} tries left")
             tries -= 1
@@ -77,12 +85,12 @@ def main() -> None:
 
     access_key_id = retry(session.get_credentials, 3).access_key
 
-    response = retry(functools.partial(iam.list_access_keys, UserName=username), 3)
+    response = retry(wrapped_partial(iam.list_access_keys, UserName=username), 3)
 
     for k in filter(lambda x: x["Status"] == "Inactive", response["AccessKeyMetadata"]):
         logger.info("Deleting access key with id")
         retry(
-            functools.partial(
+            wrapped_partial(
                 iam.delete_access_key,
                 UserName=k["UserName"],
                 AccessKeyId=k["AccessKeyId"],
@@ -91,7 +99,7 @@ def main() -> None:
         )
 
     logging.info("Creating new access key")
-    response = retry(functools.partial(iam.create_access_key, UserName=username), 3)
+    response = retry(wrapped_partial(iam.create_access_key, UserName=username), 3)
 
     new_access_key = response["AccessKey"]
     new_access_key_id = new_access_key["AccessKeyId"]
@@ -110,7 +118,7 @@ def main() -> None:
 
     logging.info("Disable old access key")
     response = retry(
-        functools.partial(
+        wrapped_partial(
             iam.update_access_key,
             UserName=username,
             AccessKeyId=access_key_id,
